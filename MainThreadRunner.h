@@ -12,6 +12,7 @@
 #include <setjmp.h>
 #include <ppapi/c/ppb.h>
 #include <ppapi/c/pp_instance.h>
+#include "SDL_nacl.h"
 //#include <list>
 
 // Keep pepper specifics out so we can unit test.
@@ -21,10 +22,6 @@
 
 // MainThreadJob is a class that provides a method for running
 // a MainThreadRunner::JobEntry.
-typedef enum{
-	false,
-	true
-}bool;
 struct _MainThreadJob;
 struct _MainThreadRunner;
 typedef struct _JobEntry {

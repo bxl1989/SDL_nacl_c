@@ -23,11 +23,13 @@ void EventQueue_push(SDL_Event *event, EventQueue *queue){
 	queue->tail->event = event;	
 	queue->tail->next = NULL;
 }
-void EventQueue_pop(EventQueue *queue){
+SDL_Event *EventQueue_pop(EventQueue *queue){
+	SDL_Event *event = queue->head->event;
 	if(!(queue->head))
 		return;
 	queue->head = queue->head->next;
 	free(queue->head);
+	return event;
 }
 bool EventQueue_is_empty(EventQueue *queue){
 	if(queue->head)

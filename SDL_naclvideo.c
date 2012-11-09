@@ -7,23 +7,24 @@
 #include "MainThreadRunner.h"
 #include "SDL_nacljob.h"
 
-#include <ppapi/c/instance.h>
-#include <ppapi/c/graphics_2d.h>
-#include <ppapi/c/completion_callback.h>
-#include <ppapi/c/image_data.h>
-#include <ppapi/c/rect.h>
+#include <ppapi/c/pp_instance.h>
+#include <ppapi/c/ppb_graphics_2d.h>
+#include <ppapi/c/ppb_image_data.h>
+#include <ppapi/c/pp_completion_callback.h>
+#include <ppapi/c/ppb_image_data.h>
+#include <ppapi/c/pp_rect.h>
 #include <ppapi/c/pp_errors.h>
 
-PP_Instance* gNaclPPInstance;
+PP_Instance gNaclPPInstance;
 static int gNaclVideoWidth;
 static int gNaclVideoHeight;
 static MainThreadRunner* gNaclMainThreadRunner;
 
 static int kNaClFlushDelayMs = 20;
 
+extern PPB_ImageData *g_image_data_interface;
 #include "SDL_nacl.h"
 
-extern "C" {
 
 #include "SDL_video.h"
 #include "SDL_mouse.h"
@@ -159,9 +160,10 @@ SDL_Rect **NACL_ListModes(_THIS, SDL_PixelFormat *format, Uint32 flags) {
 
 SDL_Surface *NACL_SetVideoMode(_THIS, SDL_Surface *current,
     int width, int height, int bpp, Uint32 flags) {
-
+  
+  SDLNaclJob* job;
   unsigned char *data;
-
+  int32_t rv; 
   fprintf(stderr, "setvideomode %d %d %d %u\n", width, height, bpp, flags);
   fflush(stderr);
 
@@ -171,8 +173,9 @@ SDL_Surface *NACL_SetVideoMode(_THIS, SDL_Surface *current,
   _this->hidden->w = width;
   _this->hidden->h = height;
 
-  SDLNaclJob* job = new SDLNaclJob(CREATE_GRAPHICS_CONTEXT, _this);
-  int32_t rv = gNaclMainThreadRunner->RunJob(job);
+  //SDLNaclJob* job = new SDLNaclJob(CREATE_GRAPHICS_CONTEXT, _this);
+  job = SDLNaclJob_Create(CREATE_GRAPHICS_CONTEXT, _this);
+  rv = RunJob(gNaclMainThreadRunner, (MainThreadJob *)job);
   if (rv != PP_OK)
     return NULL;
 
@@ -198,6 +201,8 @@ SDL_Surface *NACL_SetVideoMode(_THIS, SDL_Surface *current,
 }
 
 static void NACL_UpdateRects(_THIS, int numrects, SDL_Rect *rects) {
+  SDLNaclJob* job;
+  unsigned char *start, *end, *p;
   if (_this->hidden->bpp == 0) // not initialized yet
     return;
 
@@ -207,29 +212,31 @@ static void NACL_UpdateRects(_THIS, int numrects, SDL_Rect *rects) {
 
   // Clear alpha channel in the ImageData.
   //unsigned char* start = (unsigned char*)_this->hidden->image_data->data();
-  unsigned char* start = (unsigned char *)g_image_data_interface->Map(_this->hidden->image_data);
-  unsigned char* end = start + (_this->hidden->w * _this->hidden->h * _this->hidden->bpp / 8);
-  for (unsigned char* p = start + 3; p < end; p +=4)
-    *p = 0xFF;
+  start = (unsigned char *)g_image_data_interface->Map(_this->hidden->image_data);
+  end = start + (_this->hidden->w * _this->hidden->h * _this->hidden->bpp / 8);
+  for (p = start + 3; p < end; p +=4)
+    (*p) = 0xFF;
 
   _this->hidden->numrects = numrects;
   _this->hidden->rects = rects;
 
   // Flush on the main thread.
-  SDLNaclJob* job = new SDLNaclJob(VIDEO_FLUSH, _this);
-  gNaclMainThreadRunner->RunJob(job);
+  //SDLNaclJob* job = new SDLNaclJob(VIDEO_FLUSH, _this);
+  job = SDLNaclJob_Create(VIDEO_FLUSH, _this);
+  RunJob(gNaclMainThreadRunner, (MainThreadJob *)job);
 
   _this->hidden->numrects = 0; // sanity
   _this->hidden->rects = NULL;
 }
 
-static void NACL_FreeWMCursor(_THIS, WMcursor *cursor) {
-  delete cursor;
+static void NACL_FreeWMCursor(_THIS, struct WMcursor *cursor) {
+  	free(cursor);	
+	//delete cursor;
 }
 
 static WMcursor *NACL_CreateWMCursor(_THIS,
     Uint8 *data, Uint8 *mask, int w, int h, int hot_x, int hot_y) {
-  return new WMcursor();
+  return (struct WMcursor *)malloc(sizeof(struct WMcursor));
 }
 
 static int NACL_ShowWMCursor(_THIS, WMcursor *cursor) {
@@ -243,13 +250,15 @@ static void NACL_WarpWMCursor(_THIS, Uint16 x, Uint16 y) {
    another SDL video routine -- notably UpdateRects.
 */
 void NACL_VideoQuit(_THIS) {
+  SDLNaclJob* job;
   if (_this->screen->pixels != NULL)
   {
     SDL_free(_this->screen->pixels);
     _this->screen->pixels = NULL;
   }
 
-  SDLNaclJob* job = new SDLNaclJob(VIDEO_QUIT, _this);
-  gNaclMainThreadRunner->RunJob(job);
+  //SDLNaclJob* job = new SDLNaclJob(VIDEO_QUIT, _this);
+  //gNaclMainThreadRunner->RunJob(job);
+  job = SDLNaclJob_Create(VIDEO_QUIT, _this);
+  RunJob(gNaclMainThreadRunner, (MainThreadJob *)job);
 }
-} // extern "C"
