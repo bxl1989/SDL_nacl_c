@@ -6,8 +6,8 @@
 #include "../SDL_sysvideo.h"
 #include "SDL_mutex.h"
 
-#include <ppapi/c/instance.h>
-#include <ppapi/c/graphics_2d.h>
+#include <ppapi/c/pp_instance.h>
+#include <ppapi/c/ppb_graphics_2d.h>
 //#include <vector>
 
 

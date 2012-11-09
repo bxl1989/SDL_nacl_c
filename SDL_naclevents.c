@@ -8,9 +8,9 @@
 
 #include "SDL_naclevents_c.h"
 #include "eventqueue.h"
-#include <ppapi/c/input_event.h>
-#include <ppapi/c/point.h>
-#include <ppapi/c/var.h>
+#include <ppapi/c/pp_input_event.h>
+#include <ppapi/c/pp_point.h>
+#include <ppapi/c/pp_var.h>
 
 #include <math.h>
 
@@ -173,7 +173,9 @@ void SDL_NACL_PushEvent(PP_Resource ppevent) {
   SDL_Event event;
   PP_Resource input_event, mouse_event, wheel_event, keyboard_event;
   extern PPB_InputEvent *g_input_event_interface;
-  
+  extern PPB_MouseInputEvent *g_mouse_input_event_interface;
+  extern PPB_KeyboardInputEvet *g_keyboard_input_event_interface;
+  extern PPB_WheelInputEvent *g_wheel_input_event_interface;
   PP_InputEvent_Type type = g_input_event_interface->GetType(ppevent);
 
   input_event = ppevent;
@@ -185,7 +187,10 @@ void SDL_NACL_PushEvent(PP_Resource ppevent) {
     //  reinterpret_cast<pp::MouseInputEvent*>(input_event);
     mouse_event = input_event;
     event.type = (type == PP_INPUTEVENT_TYPE_MOUSEUP) ? SDL_MOUSEBUTTONUP : SDL_MOUSEBUTTONDOWN;
-    event.button.button = translateButton(mouse_event->GetButton());
+    //event.button.button = translateButton(mouse_event->GetButton());
+    event.button.button = translateButton(
+		    g_mouse_input_event_interface->GetButton(mouse_event));
+    //event.button.x = mouse_event->GetPosition().x();
     event.button.x = mouse_event->GetPosition().x();
     event.button.y = mouse_event->GetPosition().y();
     event_queue.PushEvent(copyEvent(&event));
