@@ -5,6 +5,7 @@
  */
 #ifndef LIBRARIES_NACL_MOUNTS_BASE_MAINTHREADRUNNER_H_
 #define LIBRARIES_NACL_MOUNTS_BASE_MAINTHREADRUNNER_H_
+#include "mybool.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>

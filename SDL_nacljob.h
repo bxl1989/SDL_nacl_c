@@ -6,6 +6,7 @@
 #ifndef _SDL_nacljob_h
 #define _SDL_nacljob_h
 
+#include "mybool.h"
 #include <ppapi/c/pp_errors.h>
 #include <ppapi/c/pp_file_info.h>
 #include <ppapi/c/pp_completion_callback.h>

@@ -1,3 +1,4 @@
+#include "mybool.h"
 #include "SDL_config.h"
 
 #include "SDL_naclvideo.h"
