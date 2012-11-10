@@ -1,0 +1,30 @@
+
+SHELL	= /bin/bash
+CC      = gcc
+LD	= ld
+INCLUDE = -I./include -I/home/bxl/ppapi-new
+CFLAGS  = -g -O2 
+EXTRA_CFLAGS = -I./include -D_GNU_SOURCE=1 -fvisibility=hidden  -D_REENTRANT    -DXTHREADS -D_REENTRANT -DHAVE_LINUX_VERSION_H
+LDFLAGS = -shared
+EXTRA_LDFLAGS =  -lm -ldl -lpthread
+LIBTOOL = $(SHELL) $(top_builddir)/libtool
+INSTALL = /usr/bin/install -c
+NASM	=  -f elf
+AR	= ar
+RANLIB	= ranlib
+WINDRES	= 
+TARGET  = libSDL.a 
+SOURCES =  $(wildcard ./src/video/nacl/*.c ./src/*.c ./src/audio/*.c ./src/cdrom/*.c ./src/cpuinfo/*.c ./src/events/*.c ./src/file/*.c ./src/stdlib/*.c ./src/thread/*.c ./src/timer/*.c ./src/video/*.c ./src/joystick/*.c ./src/video/dummy/*.c ./src/audio/disk/*.c ./src/audio/dummy/*.c ./src/loadso/dlopen/*.c ./src/audio/dsp/*.c ./src/audio/dma/*.c ./src/audio/alsa/*.c ./src/audio/pulse/*.c ./src/video/x11/*.c ./src/video/Xext/Xxf86dga/*.c ./src/video/dga/*.c ./src/video/Xext/Xxf86vm/*.c ./src/video/Xext/Xv/*.c ./src/video/Xext/Xinerama/*.c ./src/video/Xext/XME/*.c ./src/video/fbcon/*.c ./src/thread/pthread/SDL_systhread.c ./src/thread/pthread/SDL_syssem.c ./src/thread/pthread/SDL_sysmutex.c ./src/thread/pthread/SDL_syscond.c ./src/joystick/linux/*.c ./src/cdrom/linux/*.c ./src/timer/unix/*.c )
+objects = out
+OBJECTS = $(SOURCES:%.c=%.o) 
+.PHONY:all
+all:$(TARGET)
+$(TARGET):$(OBJECTS)
+	$(AR) cru $@ $(OBJECTS)
+$(OBJECTS):%.o:%.c
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(INCLUDE) -c $< -o $@
+
+.PHONY:clean
+clean:
+	rm -f $(OBJECTS) $(TARGET)
