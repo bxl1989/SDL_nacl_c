@@ -1,4 +1,4 @@
-SRCS = MainThreadRunner.c SDL_naclevents.c SDL_naclvideo.c
+SRCS = MainThreadRunner.c SDL_naclevents.c SDL_nacljob.c SDL_naclvideo.c
 OBJS = $(patsubst %.c, %.o, $(SRCS))
 
 .PHONY:all

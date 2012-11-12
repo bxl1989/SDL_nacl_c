@@ -183,7 +183,6 @@ void SDL_NACL_PushEvent(PP_Resource ppevent) {
   int sdl_wheel_clicks_y;
   int i;
   PP_InputEvent_Type type = g_input_event_interface->GetType(ppevent);
-
   input_event = ppevent;
   //pp::InputEvent *input_event = const_cast<pp::InputEvent*>(&ppevent);
 

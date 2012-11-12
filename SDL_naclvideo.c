@@ -35,7 +35,7 @@ extern PPB_ImageData *g_image_data_interface;
 #define NACLVID_DRIVER_NAME "nacl"
 
 void SDL_NACL_SetInstance(PP_Instance instance, int width, int height) {
-  bool is_resize = gNaclPPInstance &&
+  bool is_resize = (gNaclPPInstance!=0) &&
     (width != gNaclVideoWidth || height != gNaclVideoHeight);
   if (!gNaclPPInstance) {
     gNaclPPInstance = instance;
@@ -88,7 +88,7 @@ static void NACL_DeleteDevice(SDL_VideoDevice *device) {
 
 static SDL_VideoDevice *NACL_CreateDevice(int devindex) {
   SDL_VideoDevice *device;
-
+  printf("NACL_CreateDevice called\n");
   assert(gNaclPPInstance);
 
   /* Initialize all variables that we clean on shutdown */
@@ -139,6 +139,7 @@ VideoBootStrap NACL_bootstrap = {
 
 int NACL_VideoInit(_THIS, SDL_PixelFormat *vformat) {
   fprintf(stderr, "CONGRATULATIONS: You are using the SDL nacl video driver!\n");
+  printf("CONGRATULATIONS: You are using the SDL nacl video driver!\n");
 
   /* Determine the screen depth (use default 8-bit depth) */
   /* we change this during the SDL_SetVideoMode implementation... */
@@ -224,6 +225,7 @@ static void NACL_UpdateRects(_THIS, int numrects, SDL_Rect *rects) {
   //SDLNaclJob* job = new SDLNaclJob(VIDEO_FLUSH, _this);
   job = SDLNaclJob_Create(VIDEO_FLUSH, _this);
   RunJob(gNaclMainThreadRunner, (MainThreadJob *)job);
+  printf("After RunJob Video_Flush\n");
 
   _this->hidden->numrects = 0; // sanity
   _this->hidden->rects = NULL;

@@ -9,12 +9,19 @@
 #include <errno.h>
 
 // Only use pepper in nacl to allow unit testing.
-#ifdef __native_client__
+//#ifdef __native_client__
+//#  include <ppapi/c/pp_errors.h>
+//#  include <ppapi/c/completion_callback.h>
+//#  include <ppapi/c/module.h>
+//#  define USE_PEPPER
+//#endif
+
 #  include <ppapi/c/pp_errors.h>
-#  include <ppapi/c/completion_callback.h>
-#  include <ppapi/c/module.h>
+#  include <ppapi/c/pp_completion_callback.h>
+#  include <ppapi/c/ppb_core.h>
 #  define USE_PEPPER
-#endif
+
+extern PPB_Core *g_core_interface;
 
 // Stack space to allocate by default to the event handler
 // thread in the presence of an ancillary 'pseudo-thread'.
@@ -28,10 +35,10 @@ static pthread_t main_thread_id_;
 #endif
 
 // Static variables in MainThreaadRunner.
-jmp_buf main_thread_state_;
-jmp_buf pseudo_thread_state_;
-bool in_pseudo_thread_ = false;
-bool forked_pseudo_thread_ = false;
+static jmp_buf main_thread_state_;
+static jmp_buf pseudo_thread_state_;
+static bool in_pseudo_thread_ = false;
+static bool forked_pseudo_thread_ = false;
 
 MainThreadRunner *MainThreadRunner_Create(PP_Instance instance){
  MainThreadRunner *runner;
@@ -61,7 +68,7 @@ int32_t RunJob(MainThreadRunner *runner, MainThreadJob *job){
   entry.pepper_instance = runner->pepper_instance_;
   entry.job = job;
 
-  bool in_main_thread = IsMainThread(runner);
+  bool in_main_thread = IsMainThread();
   // Must be off main thread, or on a pseudothread.
   assert(!in_main_thread || in_pseudo_thread_);
 
@@ -90,12 +97,13 @@ int32_t RunJob(MainThreadRunner *runner, MainThreadJob *job){
   //    pp::CompletionCallback(&DoWorkShim, this), PP_OK);
   g_core_interface->CallOnMainThread(0,
       PP_MakeCompletionCallback(&DoWorkShim, runner), PP_OK);
+  printf("After Core CallOnMainThread called\n");
 #endif
 
   // Block differntly on the main thread.
   if (entry.pseudo_thread_job) {
     // block pseudothread until job is done
-    PseudoThreadBlock(runner);
+    PseudoThreadBlock();
   } else {
     // wait on condition until the job is done
     pthread_mutex_lock(&entry.done_mutex);
@@ -112,12 +120,12 @@ int32_t RunJob(MainThreadRunner *runner, MainThreadJob *job){
   return entry.result;
 }
 
-void ResultCompletion(MainThreadRunner *runner, void *arg, int32_t result){
+void ResultCompletion(void *arg, int32_t result){
   JobEntry* entry = (JobEntry *)(arg);
   entry->result = result;
   // Signal differently depending on if the pseudothread is involved.
   if (entry->pseudo_thread_job) {
-    PseudoThreadResume(runner);
+    PseudoThreadResume();
   } else {
     pthread_mutex_lock(&entry->done_mutex);
     entry->is_done = true;
@@ -134,6 +142,7 @@ void DoWorkShim(void *p, int32_t unused){
 
 void DoWork(MainThreadRunner *runner){
   JobEntry* entry;
+  printf("DoWork called\n");
   pthread_mutex_lock(&(runner->lock_));
   //if (!job_queue_.empty()) {
   if (!(JobEntry_list_is_empty(&(runner->job_queue_)))) {
@@ -143,38 +152,39 @@ void DoWork(MainThreadRunner *runner){
 
     // Release lock before doing work.
     pthread_mutex_unlock(&(runner->lock_));
-    entry->job->Run(entry);
+    entry->job->Run(entry, entry->job);
+    printf("entry->job->Run(entry, entry->job)");
     return;
   }
   pthread_mutex_unlock(&(runner->lock_));
 }
 
-PP_Instance ExtractPepperInstance(MainThreadRunner *runner,  JobEntry *e){
+PP_Instance ExtractPepperInstance(JobEntry *e){
   return e->pepper_instance;
 }
 
-void PseudoThreadFork(MainThreadRunner *runner, void *(*func)(void *arg), void *arg){
-  PseudoThreadHeadroomFork(runner, kDefaultPseudoThreadHeadroom, func, arg);
+void PseudoThreadFork(void *(*func)(void *arg), void *arg){
+  PseudoThreadHeadroomFork(kDefaultPseudoThreadHeadroom, func, arg);
 }
 
-void PseudoThreadHeadroomFork(MainThreadRunner *runner, 
-      int bytes_headroom, void *(*func)(void *arg), void *arg){
+void PseudoThreadHeadroomFork(
+	  int bytes_headroom, void *(*func)(void *arg), void *arg){
   // Must be run from the main thread.
-  assert(IsMainThread(runner));
+  assert(IsMainThread());
   // Only one pseudothread can be forked.
   assert(!forked_pseudo_thread_);
   // Leave a gap of bytes_headroom on the stack between
   alloca(bytes_headroom);
   // Goto pseudothread, but remeber how to come back here.
   if (!setjmp(main_thread_state_)) {
-    InnerPseudoThreadFork(runner, func, arg);
+    InnerPseudoThreadFork(func, arg);
   }
   in_pseudo_thread_ = false;
 }
 
 // Put things in another scope to keep above headroom,
 // even after thread ends.
-void InnerPseudoThreadFork(MainThreadRunner *runner, void *(func)(void *arg), void *arg){
+void InnerPseudoThreadFork(void *(func)(void *arg), void *arg){
   forked_pseudo_thread_ = true;
   in_pseudo_thread_ = true;
   func(arg);
@@ -186,9 +196,9 @@ void InnerPseudoThreadFork(MainThreadRunner *runner, void *(func)(void *arg), vo
   }
 }
 
-void PseudoThreadBlock(MainThreadRunner *runner){
+void PseudoThreadBlock(){
   // Must be run from the main thread.
-  assert(IsMainThread(runner));
+  assert(IsMainThread());
   // Pseudothread must have been forked.
   assert(forked_pseudo_thread_);
   // Must be run only from the pseudothread.
@@ -200,9 +210,9 @@ void PseudoThreadBlock(MainThreadRunner *runner){
   in_pseudo_thread_ = true;
 }
 
-void PseudoThreadResume(MainThreadRunner *runner){
+void PseudoThreadResume(){
   // Must be run from the main thread.
-  assert(IsMainThread(runner));
+  assert(IsMainThread());
   // Pseudothread must have been forked.
   assert(forked_pseudo_thread_);
   // Can only be run from the main thread.
@@ -214,17 +224,16 @@ void PseudoThreadResume(MainThreadRunner *runner){
   in_pseudo_thread_ = false;
 }
 
-bool IsMainThread(MainThreadRunner *runner){
+bool IsMainThread(){
 #ifdef USE_PEPPER
-  extern PP_Core *g_core_interface;
   return g_core_interface->IsMainThread();
 #else
   return pthread_equal(pthread_self(), main_thread_id_);
 #endif
 }
 
-bool IsPseudoThread(MainThreadRunner *runner){
-  return IsMainThread(runner) && in_pseudo_thread_;
+bool IsPseudoThread(){
+  return IsMainThread() && in_pseudo_thread_;
 }
 
 void JobEntry_list_push_back(JobEntry job, JobEntry_list_t *list){

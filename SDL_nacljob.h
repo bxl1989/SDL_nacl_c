@@ -38,26 +38,20 @@ typedef enum {
 } SDLNaclOperation;
 
 typedef struct _SDLNaclJob{
-  void(* Run)(JobEntry *e);
+  void(* Run)(JobEntry *e, void *job);
   SDLNaclOperation op_;
   SDL_VideoDevice *device_;
   //pp::CompletionCallbackFactory<SDLNaclJob> *factory_;
-  struct PP_CompletionCallback factory_; 
   JobEntry *job_entry_;
 	
 }SDLNaclJob;
 
-//class SDLNaclJob : public MainThreadJob {
- SDLNaclJob *SDLNaclJob_Create(SDLNaclOperation op, SDL_VideoDevice* device){
-	SDLNaclJob *job = (SDLNaclJob *)malloc(sizeof(SDLNaclJob)); 
-	job->op_ = op;
-	job->device_ = device;
- 	return job;	
- }
- void SDLNaclJob_Destroy(SDLNaclJob *job){
- 	free(job);
- }
-  void Finish(SDLNaclJob *job, int32_t result);
+void SDLNaclJob_Run(JobEntry *e, void *job);
+SDLNaclJob *SDLNaclJob_Create(SDLNaclOperation op, SDL_VideoDevice* device);
+void SDLNaclJob_Destroy(SDLNaclJob *job);
 
+void Finish(SDLNaclJob *job, int32_t result);
+
+void SDLNaclJob_Run(JobEntry *e, void *job);
 
 #endif
