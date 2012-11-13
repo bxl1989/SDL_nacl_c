@@ -51,7 +51,7 @@ typedef struct _MainThreadRunner{
   //std::list<JobEntry*> job_queue_;
   //JobEntry_list_t job_queue_;
   JobEntry *job_queue_[QSIZE];
-  int qhead, qtail;
+  int qhead, qtail, size;
   PP_Instance pepper_instance_;
 
 }MainThreadRunner;

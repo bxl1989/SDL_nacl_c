@@ -82,20 +82,16 @@ static int NACL_Available(void) {
 }
 
 static void NACL_DeleteDevice(SDL_VideoDevice *device) {
-  printf("NACL_DeleteDevice called\n");
-  printf("Device in Delete: %p\n", device);
   SDL_free(device->hidden);
   SDL_free(device);
 }
 
 static SDL_VideoDevice *NACL_CreateDevice(int devindex) {
   SDL_VideoDevice *device;
-  printf("NACL_CreateDevice called\n");
   assert(gNaclPPInstance);
 
   /* Initialize all variables that we clean on shutdown */
   device = (SDL_VideoDevice *)SDL_malloc(sizeof(SDL_VideoDevice));
-  printf("Device in Create: %p\n", device);
   if ( device ) {
     SDL_memset(device, 0, (sizeof *device));
     device->hidden = (struct SDL_PrivateVideoData *)
@@ -198,7 +194,6 @@ SDL_Surface *NACL_SetVideoMode(_THIS, SDL_Surface *current,
 
   //current->pixels = _this->hidden->image_data->data();
   data = (unsigned char *)g_image_data_interface->Map(_this->hidden->image_data);
-  printf("pixels: %p\n", data);
   current->pixels = data;
   /* We're done */
   return(current);
@@ -207,7 +202,6 @@ SDL_Surface *NACL_SetVideoMode(_THIS, SDL_Surface *current,
 static void NACL_UpdateRects(_THIS, int numrects, SDL_Rect *rects) {
   SDLNaclJob* job;
   unsigned char *start, *end, *p;
-  printf("NACL_UpdateRects called\n");
   if (_this->hidden->bpp == 0) // not initialized yet
     return;
 
@@ -232,11 +226,9 @@ static void NACL_UpdateRects(_THIS, int numrects, SDL_Rect *rects) {
 
   _this->hidden->numrects = 0; // sanity
   _this->hidden->rects = NULL;
-  printf("The End of NACL_UpdateRect\n");
 }
 
 static void NACL_FreeWMCursor(_THIS, struct WMcursor *cursor) {
-  	printf("NACL_FreeWMCursor called\n");
 	free(cursor);	
 	//delete cursor;
 }
@@ -258,12 +250,9 @@ static void NACL_WarpWMCursor(_THIS, Uint16 x, Uint16 y) {
 */
 void NACL_VideoQuit(_THIS) {
   SDLNaclJob* job;
-  printf("NACL_VideoQuit called\n");
-  printf("Device in Quit: %p\n", _this);
   if (_this->screen->pixels != NULL)
   {
-    //SDL_free(_this->screen->pixels);
-    printf("After SDL_free\n");
+    SDL_free(_this->screen->pixels);
     _this->screen->pixels = NULL;
   }
 

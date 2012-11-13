@@ -43,7 +43,8 @@ MainThreadRunner *MainThreadRunner_Create(PP_Instance instance){
   pthread_mutex_init(&(runner->lock_), NULL);
 
   //runner->job_queue_.head = runner->job_queue_.tail = NULL;
-  runner->qhead = 0;runner->qtail = -1;
+  runner->qhead = 0;runner->qtail = 0;
+  runner->size= 0;
   return runner;
 }
 
@@ -81,7 +82,9 @@ int32_t RunJob(MainThreadRunner *runner, MainThreadJob *job){
   pthread_mutex_lock(&(runner->lock_));
   //job_queue_.push_back(&entry);
   //JobEntry_list_push_back(&entry, &(runner->job_queue_));
-  runner->job_queue_[(++(runner->qtail))%QSIZE]=&entry;
+  runner->job_queue_[runner->qtail]=&entry;
+  runner->qtail = (runner->qtail+1)%QSIZE;
+  runner->size++;
   pthread_mutex_unlock(&(runner->lock_));
 
 #ifdef USE_PEPPER
@@ -91,7 +94,6 @@ int32_t RunJob(MainThreadRunner *runner, MainThreadJob *job){
   g_core_interface->CallOnMainThread(0,
       PP_MakeCompletionCallback(&DoWorkShim, runner), PP_OK);
 #endif
-  printf("RunJob entry: %p\n", &entry);
   // Block differntly on the main thread.
   if (entry.pseudo_thread_job) {
     // block pseudothread until job is done
@@ -137,13 +139,13 @@ void DoWork(MainThreadRunner *runner){
   pthread_mutex_lock(&(runner->lock_));
   //if (!job_queue_.empty()) {
   //if (!(JobEntry_list_is_empty(&(runner->job_queue_)))) {
-  if (!(runner->qhead>runner->qtail)) {
+  if (!(runner->size==0)) {
     //entry = JobEntry_list_get_front(&(runner->job_queue_));
     JobEntry* entry = runner->job_queue_[runner->qhead];
-    printf("DoWork entry:%p\n", entry);
     //job_queue_.pop_front();
     //JobEntry_list_pop_front(&(runner->job_queue_));
     runner->qhead = (runner->qhead+1)%QSIZE;
+    runner->size--;
     // Release lock before doing work.
     pthread_mutex_unlock(&(runner->lock_));
     entry->job->Run(entry, entry->job);
@@ -229,33 +231,3 @@ bool IsPseudoThread(){
   return IsMainThread() && in_pseudo_thread_;
 }
 
-void JobEntry_list_push_back(JobEntry *job, JobEntry_list_t *list){
-	if(!(list->head)){
-		list->head = list->tail = (JobEntry_node_t *)malloc(sizeof(JobEntry_node_t));
-	}else{
-		list->tail->next = (JobEntry_node_t *)malloc(sizeof(JobEntry_node_t));
-		list->tail = list->tail->next;
-	}
-	list->tail->job = job;	
-	//memcpy(&(list->tail->job), &job, sizeof(JobEntry));
-	list->tail->next = NULL;
-}
-void JobEntry_list_pop_front(JobEntry_list_t *list){
-	JobEntry_node_t *tmp;
-	if(!(list->head))
-		return;
-	tmp = list->head;
-	list->head = list->head->next;
-	free(tmp);
-}
-bool JobEntry_list_is_empty(JobEntry_list_t *list){
-	if(list->head)
-		return false;
-	else
-		return true;
-}
-JobEntry *JobEntry_list_get_front(JobEntry_list_t *list){
-	if(!(list->head))
-		return NULL;
-	return list->head->job;
-}
