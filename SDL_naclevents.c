@@ -1,6 +1,6 @@
 #include "SDL_config.h"
 
-#include "SDL_nacl.h"
+#include "SDL_nacl_c.h"
 
 #include "SDL.h"
 #include "../../events/SDL_sysevents.h"
@@ -16,7 +16,7 @@
 
 #include <math.h>
 
-static EventQueue event_queue;
+static EventQueue *event_queue = NULL;
 
 static Uint8 translateButton(int32_t button) {
   switch (button) {
@@ -179,9 +179,13 @@ void SDL_NACL_PushEvent(PP_Resource ppevent) {
   extern PPB_KeyboardInputEvent *g_keyboard_input_event_interface;
   extern PPB_WheelInputEvent *g_wheel_input_event_interface;
   extern PPB_Var *g_var_interface;
+  char *keystring;
+  int keystringlen; 
   int sdl_wheel_clicks_x;
   int sdl_wheel_clicks_y;
   int i;
+  struct PP_Var var;
+  event_queue = EventQueue_Create();
   PP_InputEvent_Type type = g_input_event_interface->GetType(ppevent);
   input_event = ppevent;
   //pp::InputEvent *input_event = const_cast<pp::InputEvent*>(&ppevent);
@@ -200,7 +204,7 @@ void SDL_NACL_PushEvent(PP_Resource ppevent) {
     //event.button.y = mouse_event->GetPosition().y();
     event.button.y = g_mouse_input_event_interface->GetPosition(mouse_event).y;
     //event_queue.PushEvent(copyEvent(&event));
-    EventQueue_push(copyEvent(&event), &event_queue);
+    PushEvent(event_queue, copyEvent(&event));
   } else if (type == PP_INPUTEVENT_TYPE_WHEEL) {
     //pp::WheelInputEvent *wheel_event =
     //  reinterpret_cast<pp::WheelInputEvent*>(input_event);
@@ -217,19 +221,19 @@ void SDL_NACL_PushEvent(PP_Resource ppevent) {
     for (i = 0; i < abs(sdl_wheel_clicks_x); i++) {
       event.type = SDL_MOUSEBUTTONDOWN;
       //event_queue.PushEvent(copyEvent(&event));
-      EventQueue_push(copyEvent(&event), &event_queue);
+      PushEvent(event_queue, copyEvent(&event));
       event.type = SDL_MOUSEBUTTONUP;
       //event_queue.PushEvent(copyEvent(&event));
-      EventQueue_push(copyEvent(&event),&event_queue);
+      PushEvent(event_queue, copyEvent(&event));
     }
     event.button.button = (sdl_wheel_clicks_y > 0) ? SDL_BUTTON_WHEELUP : SDL_BUTTON_WHEELDOWN;
     for (i = 0; i < abs(sdl_wheel_clicks_y); i++) {
       event.type = SDL_MOUSEBUTTONDOWN;
       //event_queue.PushEvent(copyEvent(&event));
-      EventQueue_push(copyEvent(&event), &event_queue);
+      PushEvent(event_queue, copyEvent(&event));
       event.type = SDL_MOUSEBUTTONUP;
       //event_queue.PushEvent(copyEvent(&event));
-      EventQueue_push(copyEvent(&event), &event_queue);
+      PushEvent(event_queue, copyEvent(&event));
     }
     wheel_clicks_x -= sdl_wheel_clicks_x;
     wheel_clicks_y -= sdl_wheel_clicks_y;
@@ -243,7 +247,7 @@ void SDL_NACL_PushEvent(PP_Resource ppevent) {
     //event.motion.y = mouse_event->GetPosition().y();
     event.motion.y = g_mouse_input_event_interface->GetPosition(mouse_event).y;
     //event_queue.PushEvent(copyEvent(&event));
-    EventQueue_push(copyEvent(&event), &event_queue);
+    PushEvent(event_queue, copyEvent(&event));
   } else if (type == PP_INPUTEVENT_TYPE_KEYDOWN ||
              type == PP_INPUTEVENT_TYPE_KEYUP ||
              type == PP_INPUTEVENT_TYPE_CHAR) {
@@ -261,8 +265,10 @@ void SDL_NACL_PushEvent(PP_Resource ppevent) {
     //keysym.scancode = keyboard_event->GetKeyCode();
     keysym.scancode = g_keyboard_input_event_interface->GetKeyCode(keyboard_event);
     //keysym.unicode = keyboard_event->GetCharacterText().AsString()[0];
-    keysym.unicode = (g_var_interface->VarToUtf8(
-	    g_keyboard_input_event_interface->GetCharacterText(keyboard_event), NULL))[0];
+    var = g_keyboard_input_event_interface->GetCharacterText(keyboard_event);
+    keystring = g_var_interface->VarToUtf8(var, &keystringlen);
+    keysym.unicode = keystring[0];
+    printf("keystring[0]:%d keystringlen:%d\n", keystring[0], keystringlen);
     keysym.sym = translateKey(keysym.scancode);
     if (type == PP_INPUTEVENT_TYPE_KEYDOWN) {
       event.type = SDL_KEYDOWN;
@@ -286,14 +292,14 @@ void SDL_NACL_PushEvent(PP_Resource ppevent) {
     keysym.mod = KMOD_NONE;
     event.key.keysym = keysym;
     //event_queue.PushEvent(copyEvent(&event));
-    EventQueue_push(copyEvent(&event), &event_queue);
+    PushEvent(event_queue, copyEvent(&event));
   } else if (type == PP_INPUTEVENT_TYPE_MOUSEENTER ||
              type == PP_INPUTEVENT_TYPE_MOUSELEAVE) {
     event.type = SDL_ACTIVEEVENT;
     event.active.gain = (type == PP_INPUTEVENT_TYPE_MOUSEENTER) ? 1 : 0;
     event.active.state = SDL_APPMOUSEFOCUS;
     //event_queue.PushEvent(copyEvent(&event));
-    EventQueue_push(copyEvent(&event), &event_queue);
+    PushEvent(event_queue, copyEvent(&event));
   }
 }
 
@@ -303,7 +309,7 @@ void SDL_NACL_SetHasFocus(bool has_focus) {
   event.active.gain = has_focus ? 1 : 0;
   event.active.state = SDL_APPINPUTFOCUS;
   //event_queue.PushEvent(copyEvent(&event));
-  EventQueue_push(copyEvent(&event), &event_queue);
+  PushEvent(event_queue, copyEvent(&event));
 }
 
 void SDL_NACL_SetPageVisible(bool is_visible) {
@@ -312,13 +318,15 @@ void SDL_NACL_SetPageVisible(bool is_visible) {
   event.active.gain = is_visible ? 1 : 0;
   event.active.state = SDL_APPACTIVE;
   //event_queue.PushEvent(copyEvent(&event));
-  EventQueue_push(copyEvent(&event), &event_queue);
+  PushEvent(event_queue, copyEvent(&event));
 }
 
 void NACL_PumpEvents(_THIS) {
   SDL_Event* event;
+  if(event_queue == NULL)
+	  return;
   //while (event = event_queue.PopEvent()) {
-  while (event = EventQueue_pop(&event_queue)) {
+  while (event = PopEvent(event_queue)) {
     if (event->type == SDL_MOUSEBUTTONDOWN) {
       SDL_PrivateMouseButton(SDL_PRESSED, event->button.button,
                              event->button.x, event->button.y);

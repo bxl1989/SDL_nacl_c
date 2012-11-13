@@ -41,10 +41,10 @@ void SDLNaclJob_Run(JobEntry *e, void *job) {
   int i;
   struct PP_Point top_left;
   struct PP_Rect src_rect;
-  printf("SDLNaclJob_Run called\n");
+  printf("SDLNaclJob_Run entry: %p\n", e);
   //factory_ = new pp::CompletionCallbackFactory<SDLNaclJob>(this);
   //pp::CompletionCallback cc = factory_->NewCallback(&SDLNaclJob::Finish);
-  cc = PP_MakeCompletionCallback(Finish, nacljob);
+  cc = PP_MakeCompletionCallback(&Finish, nacljob);
   //pp::Instance *instance = MainThreadRunner::ExtractPepperInstance(e);
   instance = ExtractPepperInstance(e);
   switch (nacljob->op_) {
@@ -105,6 +105,7 @@ void SDLNaclJob_Run(JobEntry *e, void *job) {
 		      &top_left,
 		      &src_rect);
       //device_->hidden->context2d->PaintImageData(*device_->hidden->image_data, pp::Point(), pp::Rect(r.x, r.y, r.w, r.h));
+      printf("After PaintImageData\n");
     }
 
     //device_->hidden->context2d->Flush(cc);

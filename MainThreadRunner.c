@@ -9,36 +9,27 @@
 #include <errno.h>
 
 // Only use pepper in nacl to allow unit testing.
-//#ifdef __native_client__
-//#  include <ppapi/c/pp_errors.h>
-//#  include <ppapi/c/completion_callback.h>
-//#  include <ppapi/c/module.h>
-//#  define USE_PEPPER
-//#endif
-
+#ifdef __native_client__
 #  include <ppapi/c/pp_errors.h>
 #  include <ppapi/c/pp_completion_callback.h>
 #  include <ppapi/c/ppb_core.h>
 #  define USE_PEPPER
+#endif
 
 extern PPB_Core *g_core_interface;
 
 // Stack space to allocate by default to the event handler
 // thread in the presence of an ancillary 'pseudo-thread'.
 // 640K of stack should be enough for anyone.
-static const int kDefaultPseudoThreadHeadroom = 640 * 1024;
+const int kDefaultPseudoThreadHeadroom = 640 * 1024;
 
 // If we're not using pepper, track main thread's id so
 // we can do something sensible.
 #ifndef USE_PEPPER
-static pthread_t main_thread_id_;
+pthread_t main_thread_id_;
 #endif
 
 // Static variables in MainThreaadRunner.
-static jmp_buf main_thread_state_;
-static jmp_buf pseudo_thread_state_;
-static bool in_pseudo_thread_ = false;
-static bool forked_pseudo_thread_ = false;
 
 MainThreadRunner *MainThreadRunner_Create(PP_Instance instance){
  MainThreadRunner *runner;
@@ -51,7 +42,8 @@ MainThreadRunner *MainThreadRunner_Create(PP_Instance instance){
   runner->pepper_instance_ = instance;
   pthread_mutex_init(&(runner->lock_), NULL);
 
-  runner->job_queue_.head = runner->job_queue_.tail = NULL;
+  //runner->job_queue_.head = runner->job_queue_.tail = NULL;
+  runner->qhead = 0;runner->qtail = -1;
   return runner;
 }
 
@@ -88,7 +80,8 @@ int32_t RunJob(MainThreadRunner *runner, MainThreadJob *job){
   // put the job on the queue
   pthread_mutex_lock(&(runner->lock_));
   //job_queue_.push_back(&entry);
-  JobEntry_list_push_back(entry, &(runner->job_queue_));
+  //JobEntry_list_push_back(&entry, &(runner->job_queue_));
+  runner->job_queue_[(++(runner->qtail))%QSIZE]=&entry;
   pthread_mutex_unlock(&(runner->lock_));
 
 #ifdef USE_PEPPER
@@ -97,9 +90,8 @@ int32_t RunJob(MainThreadRunner *runner, MainThreadJob *job){
   //    pp::CompletionCallback(&DoWorkShim, this), PP_OK);
   g_core_interface->CallOnMainThread(0,
       PP_MakeCompletionCallback(&DoWorkShim, runner), PP_OK);
-  printf("After Core CallOnMainThread called\n");
 #endif
-
+  printf("RunJob entry: %p\n", &entry);
   // Block differntly on the main thread.
   if (entry.pseudo_thread_job) {
     // block pseudothread until job is done
@@ -114,9 +106,9 @@ int32_t RunJob(MainThreadRunner *runner, MainThreadJob *job){
     pthread_mutex_destroy(&entry.done_mutex);
     pthread_cond_destroy(&entry.done_cond);
   }
-
   // Cleanup.
   //delete job;
+  free(job);
   return entry.result;
 }
 
@@ -142,18 +134,19 @@ void DoWorkShim(void *p, int32_t unused){
 
 void DoWork(MainThreadRunner *runner){
   JobEntry* entry;
-  printf("DoWork called\n");
   pthread_mutex_lock(&(runner->lock_));
   //if (!job_queue_.empty()) {
-  if (!(JobEntry_list_is_empty(&(runner->job_queue_)))) {
-    entry = JobEntry_list_get_front(&(runner->job_queue_));
+  //if (!(JobEntry_list_is_empty(&(runner->job_queue_)))) {
+  if (!(runner->qhead>runner->qtail)) {
+    //entry = JobEntry_list_get_front(&(runner->job_queue_));
+    JobEntry* entry = runner->job_queue_[runner->qhead];
+    printf("DoWork entry:%p\n", entry);
     //job_queue_.pop_front();
-    JobEntry_list_pop_front(&(runner->job_queue_));
-
+    //JobEntry_list_pop_front(&(runner->job_queue_));
+    runner->qhead = (runner->qhead+1)%QSIZE;
     // Release lock before doing work.
     pthread_mutex_unlock(&(runner->lock_));
     entry->job->Run(entry, entry->job);
-    printf("entry->job->Run(entry, entry->job)");
     return;
   }
   pthread_mutex_unlock(&(runner->lock_));
@@ -236,7 +229,7 @@ bool IsPseudoThread(){
   return IsMainThread() && in_pseudo_thread_;
 }
 
-void JobEntry_list_push_back(JobEntry job, JobEntry_list_t *list){
+void JobEntry_list_push_back(JobEntry *job, JobEntry_list_t *list){
 	if(!(list->head)){
 		list->head = list->tail = (JobEntry_node_t *)malloc(sizeof(JobEntry_node_t));
 	}else{
@@ -244,23 +237,25 @@ void JobEntry_list_push_back(JobEntry job, JobEntry_list_t *list){
 		list->tail = list->tail->next;
 	}
 	list->tail->job = job;	
+	//memcpy(&(list->tail->job), &job, sizeof(JobEntry));
 	list->tail->next = NULL;
 }
 void JobEntry_list_pop_front(JobEntry_list_t *list){
+	JobEntry_node_t *tmp;
 	if(!(list->head))
 		return;
+	tmp = list->head;
 	list->head = list->head->next;
-	free(list->head);
+	free(tmp);
 }
 bool JobEntry_list_is_empty(JobEntry_list_t *list){
 	if(list->head)
-		return true;
-	else
 		return false;
+	else
+		return true;
 }
 JobEntry *JobEntry_list_get_front(JobEntry_list_t *list){
-	JobEntry *entry;
-	entry = (JobEntry *)malloc(sizeof(JobEntry));
-	memcpy(entry, &(list->head->job), sizeof(JobEntry));
-	return entry;
+	if(!(list->head))
+		return NULL;
+	return list->head->job;
 }

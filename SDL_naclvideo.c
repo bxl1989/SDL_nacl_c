@@ -23,7 +23,7 @@ static MainThreadRunner* gNaclMainThreadRunner;
 static int kNaClFlushDelayMs = 20;
 
 extern PPB_ImageData *g_image_data_interface;
-#include "SDL_nacl.h"
+#include "SDL_nacl_c.h"
 
 
 #include "SDL_video.h"
@@ -82,6 +82,8 @@ static int NACL_Available(void) {
 }
 
 static void NACL_DeleteDevice(SDL_VideoDevice *device) {
+  printf("NACL_DeleteDevice called\n");
+  printf("Device in Delete: %p\n", device);
   SDL_free(device->hidden);
   SDL_free(device);
 }
@@ -93,10 +95,11 @@ static SDL_VideoDevice *NACL_CreateDevice(int devindex) {
 
   /* Initialize all variables that we clean on shutdown */
   device = (SDL_VideoDevice *)SDL_malloc(sizeof(SDL_VideoDevice));
+  printf("Device in Create: %p\n", device);
   if ( device ) {
     SDL_memset(device, 0, (sizeof *device));
     device->hidden = (struct SDL_PrivateVideoData *)
-        SDL_malloc((sizeof *device->hidden));
+        SDL_malloc((sizeof *(device->hidden)));
   }
   if ( (device == NULL) || (device->hidden == NULL) ) {
     SDL_OutOfMemory();
@@ -139,7 +142,6 @@ VideoBootStrap NACL_bootstrap = {
 
 int NACL_VideoInit(_THIS, SDL_PixelFormat *vformat) {
   fprintf(stderr, "CONGRATULATIONS: You are using the SDL nacl video driver!\n");
-  printf("CONGRATULATIONS: You are using the SDL nacl video driver!\n");
 
   /* Determine the screen depth (use default 8-bit depth) */
   /* we change this during the SDL_SetVideoMode implementation... */
@@ -177,8 +179,9 @@ SDL_Surface *NACL_SetVideoMode(_THIS, SDL_Surface *current,
   //SDLNaclJob* job = new SDLNaclJob(CREATE_GRAPHICS_CONTEXT, _this);
   job = SDLNaclJob_Create(CREATE_GRAPHICS_CONTEXT, _this);
   rv = RunJob(gNaclMainThreadRunner, (MainThreadJob *)job);
-  if (rv != PP_OK)
+  if (rv != PP_OK){
     return NULL;
+  }
 
   /* Allocate the new pixel format for the screen */
   if ( ! SDL_ReallocFormat(current, bpp, 0xFF0000, 0xFF00, 0xFF, 0) ) {
@@ -195,8 +198,8 @@ SDL_Surface *NACL_SetVideoMode(_THIS, SDL_Surface *current,
 
   //current->pixels = _this->hidden->image_data->data();
   data = (unsigned char *)g_image_data_interface->Map(_this->hidden->image_data);
+  printf("pixels: %p\n", data);
   current->pixels = data;
-
   /* We're done */
   return(current);
 }
@@ -204,6 +207,7 @@ SDL_Surface *NACL_SetVideoMode(_THIS, SDL_Surface *current,
 static void NACL_UpdateRects(_THIS, int numrects, SDL_Rect *rects) {
   SDLNaclJob* job;
   unsigned char *start, *end, *p;
+  printf("NACL_UpdateRects called\n");
   if (_this->hidden->bpp == 0) // not initialized yet
     return;
 
@@ -225,14 +229,15 @@ static void NACL_UpdateRects(_THIS, int numrects, SDL_Rect *rects) {
   //SDLNaclJob* job = new SDLNaclJob(VIDEO_FLUSH, _this);
   job = SDLNaclJob_Create(VIDEO_FLUSH, _this);
   RunJob(gNaclMainThreadRunner, (MainThreadJob *)job);
-  printf("After RunJob Video_Flush\n");
 
   _this->hidden->numrects = 0; // sanity
   _this->hidden->rects = NULL;
+  printf("The End of NACL_UpdateRect\n");
 }
 
 static void NACL_FreeWMCursor(_THIS, struct WMcursor *cursor) {
-  	free(cursor);	
+  	printf("NACL_FreeWMCursor called\n");
+	free(cursor);	
 	//delete cursor;
 }
 
@@ -253,9 +258,12 @@ static void NACL_WarpWMCursor(_THIS, Uint16 x, Uint16 y) {
 */
 void NACL_VideoQuit(_THIS) {
   SDLNaclJob* job;
+  printf("NACL_VideoQuit called\n");
+  printf("Device in Quit: %p\n", _this);
   if (_this->screen->pixels != NULL)
   {
-    SDL_free(_this->screen->pixels);
+    //SDL_free(_this->screen->pixels);
+    printf("After SDL_free\n");
     _this->screen->pixels = NULL;
   }
 

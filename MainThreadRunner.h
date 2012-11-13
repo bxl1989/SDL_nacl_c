@@ -13,7 +13,8 @@
 #include <setjmp.h>
 #include <ppapi/c/ppb.h>
 #include <ppapi/c/pp_instance.h>
-#include "SDL_nacl.h"
+#include "SDL_nacl_c.h"
+#define QSIZE 0x1000
 //#include <list>
 
 // Keep pepper specifics out so we can unit test.
@@ -36,8 +37,8 @@ typedef struct _JobEntry {
   bool pseudo_thread_job;
 }JobEntry;
 typedef struct _JobEntry_node_t{
-	JobEntry job;
-	struct _JobEntry_list_t *next;
+	JobEntry *job;
+	struct _JobEntry_node_t *next;
 }JobEntry_node_t;
 typedef struct _JobEntry_list_t{
 	JobEntry_node_t *head, *tail;
@@ -48,7 +49,9 @@ typedef struct _MainThreadRunner{
   // is used by ResultCompletion().
   pthread_mutex_t lock_;
   //std::list<JobEntry*> job_queue_;
-  JobEntry_list_t job_queue_;
+  //JobEntry_list_t job_queue_;
+  JobEntry *job_queue_[QSIZE];
+  int qhead, qtail;
   PP_Instance pepper_instance_;
 
 }MainThreadRunner;
@@ -79,26 +82,26 @@ PP_Instance ExtractPepperInstance(JobEntry *e);
 // You will have to take some amount of re-entrancy into account.
 // Assumes 640K of stack is enough for anyone for event handling in the
 // main thread.
-static void PseudoThreadFork(void *(*func)(void *arg), void *arg);
+void PseudoThreadFork(void *(*func)(void *arg), void *arg);
 // Same as above with selectable bytes of headroom.
-static void PseudoThreadHeadroomFork(
+void PseudoThreadHeadroomFork(
 	int bytes_headroom, void *(*func)(void *arg), void *arg);
 
 // Returns:
 //   true - main thread or pseudothread.
 //   false - other pthreads.
-static bool IsMainThread(void);
+bool IsMainThread(void);
 
 // Returns true if on the psuedothread.
-static bool IsPseudoThread(void);
+bool IsPseudoThread(void);
 
 // Use these directly only if you are interacting with PPAPI
 // such that you can guarantee you'll resume because of an
 // asynchronous event you issued.
 // Block pseudothread until main thread yields.
-static void PseudoThreadBlock(void);
+void PseudoThreadBlock(void);
 // Yield main thread to pseudothread.
-static void PseudoThreadResume(void);
+void PseudoThreadResume(void);
 
 // Do at least one main thread job.
 // DO NOT use this with pepper (which sets up an event
@@ -106,17 +109,21 @@ static void PseudoThreadResume(void);
 // Use directly only for testing.
 void DoWork(MainThreadRunner *runner);
 
-static void DoWorkShim(void *p, int32_t unused);
+void DoWorkShim(void *p, int32_t unused);
 
 // Used to keep things above the headroom.
-static void InnerPseudoThreadFork(void *(func)(void *arg), void *arg);
+void InnerPseudoThreadFork(void *(func)(void *arg), void *arg);
 
 
-void JobEntry_list_push_back(JobEntry job, JobEntry_list_t *list);
+void JobEntry_list_push_back(JobEntry *job, JobEntry_list_t *list);
 void JobEntry_list_pop_front(JobEntry_list_t *list);
 bool JobEntry_list_is_empty(JobEntry_list_t *list);
 JobEntry *JobEntry_list_get_front(JobEntry_list_t *list);
 
 // MainThreadRunner executes MainThreadJobs asynchronously
+static jmp_buf main_thread_state_;
+static jmp_buf pseudo_thread_state_;
+static bool in_pseudo_thread_ = false;
+static bool forked_pseudo_thread_ = false;
 
 #endif  // LIBRARIES_NACL_MOUNTS_BASE_MAINTHREADRUNNER_H_

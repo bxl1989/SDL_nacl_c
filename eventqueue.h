@@ -2,72 +2,56 @@
 #define _SDL_nacl_eventqueue_h
 
 #include "SDL_mutex.h"
+#include <stdio.h>
+#define QSIZE 0x1000
 
-//#include <queue>
-
-typedef struct _EventQueue_node_t{
-	SDL_Event *event;
-	struct _EventQueue_node_t *next;
-}EventQueue_node_t;
-typedef struct _EventQueue {
-  EventQueue_node_t *head, *tail;
+typedef struct _EventQueue{
+  SDL_Event *queue_[QSIZE];
   SDL_mutex* mu_;
+  int qhead, qtail;
+  int size;
 }EventQueue;
-void EventQueue_push(SDL_Event *event, EventQueue *queue){
-	if(!(queue->head)){
-		queue->head = queue->tail = (EventQueue_node_t *)malloc(sizeof(EventQueue_node_t));
-	}else{
-		queue->tail->next = (EventQueue_node_t *)malloc(sizeof(EventQueue_node_t));
-		queue->tail = queue->tail->next;
-	}
-	queue->tail->event = event;	
-	queue->tail->next = NULL;
-}
-SDL_Event *EventQueue_pop(EventQueue *queue){
-	SDL_Event *event = queue->head->event;
-	if(!(queue->head))
-		return;
-	queue->head = queue->head->next;
-	free(queue->head);
-	return event;
-}
-bool EventQueue_is_empty(EventQueue *queue){
-	if(queue->head)
-		return true;
-	else
-		return false;
-}
-SDL_Event *EventQueue_get_front(EventQueue *queue){
-	return queue->head->event;
-}
-  EventQueue *EventQueue_Create() {
-    	EventQueue *eventq = (EventQueue *)malloc(sizeof(EventQueue));
-	eventq->mu_ = SDL_CreateMutex();
-	eventq->head = eventq->tail = NULL;
-	return eventq;
-  }
 
-  void EventQueue_Destroy(EventQueue *eventq) {
-    SDL_DestroyMutex(eventq->mu_);
-    free(eventq);
-  }
-
-  SDL_Event* PopEvent(EventQueue *eventq) {
-    SDL_LockMutex(eventq->mu_);
+EventQueue *EventQueue_Create(){
+	EventQueue *queue;
+	queue = (EventQueue *)malloc(sizeof(EventQueue));
+        queue->mu_ = SDL_CreateMutex();
+	queue->qhead = 0;
+	queue->qtail = 0;
+	queue->size = 0;
+	printf("After Create, qhead: %d, qtail: %d, size: %d\n", queue->qhead, queue->qtail, queue->size);
+	return queue;
+}
+void EventQueue_Destroy(EventQueue *queue){
+        SDL_DestroyMutex(queue->mu_);
+	free(queue);
+	
+}
+SDL_Event* PopEvent(EventQueue *queue) {
+    SDL_LockMutex(queue->mu_);
     SDL_Event* event = NULL;
-    if (!EventQueue_is_empty(eventq)) {
-      event = EventQueue_get_front(eventq);
-      EventQueue_pop(eventq);
+    //if (!queue_.empty()) {
+    if (!(queue->size == 0)) {
+      //event = queue_.front();
+      event = queue->queue_[queue->qhead];
+      //queue_.pop();
+      queue->qhead = (queue->qhead+1)%QSIZE;
+      queue->size--;
     }
-    SDL_UnlockMutex(eventq->mu_);
+    SDL_UnlockMutex(queue->mu_);
+    printf("After Pop, qhead: %d, qtail: %d, size: %d\n", queue->qhead, queue->qtail, queue->size);
     return event;
-  }
+}
 
-   void PushEvent(EventQueue *eventq, SDL_Event* event) {
-    SDL_LockMutex(eventq->mu_);
-    EventQueue_push(event, eventq);
-    SDL_UnlockMutex(eventq->mu_);
-   } 
+void PushEvent(EventQueue *queue, SDL_Event* event) {
+    SDL_LockMutex(queue->mu_);
+    //queue_.push(event);
+    queue->queue_[queue->qtail]=event;
+    queue->qtail = (queue->qtail+1)%QSIZE;
+    queue->size++;
+    SDL_UnlockMutex(queue->mu_);
+    printf("After Push, qhead: %d, qtail: %d, size: %d\n", queue->qhead, queue->qtail, queue->size);
+}
 
 
 #endif // _SDL_nacl_eventqueue_h
